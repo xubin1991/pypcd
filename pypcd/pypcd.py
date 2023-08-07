@@ -12,7 +12,12 @@ dimatura@cmu.edu, 2013-2018
 import re
 import struct
 import copy
-import cStringIO as sio
+try:
+    import cStringIO as sio
+except ImportError:
+    from io import StringIO as sio ## for Python 3
+
+
 import numpy as np
 import warnings
 import lzf
@@ -67,6 +72,7 @@ numpy_pcd_type_mappings = [(np.dtype('float32'), ('F', 4)),
                            (np.dtype('uint16'), ('U', 2)),
                            (np.dtype('uint32'), ('U', 4)),
                            (np.dtype('uint64'), ('U', 8)),
+                           (np.dtype('int8'), ('I', 1)),
                            (np.dtype('int16'), ('I', 2)),
                            (np.dtype('int32'), ('I', 4)),
                            (np.dtype('int64'), ('I', 8))]
@@ -91,11 +97,11 @@ def parse_header(lines):
         elif key in ('fields', 'type'):
             metadata[key] = value.split()
         elif key in ('size', 'count'):
-            metadata[key] = map(int, value.split())
+            metadata[key] = list(map(int, value.split()))
         elif key in ('width', 'height', 'points'):
             metadata[key] = int(value)
         elif key == 'viewpoint':
-            metadata[key] = map(float, value.split())
+            metadata[key] = list(map(float, value.split()))
         elif key == 'data':
             metadata[key] = value.strip().lower()
         # TODO apparently count is not required?
@@ -205,9 +211,9 @@ def _build_dtype(metadata):
             fieldnames.append(f)
             typenames.append(np_type)
         else:
-            fieldnames.extend(['%s_%04d' % (f, i) for i in xrange(c)])
+            fieldnames.extend(['%s_%04d' % (f, i) for i in range(c)])
             typenames.extend([np_type]*c)
-    dtype = np.dtype(zip(fieldnames, typenames))
+    dtype = np.dtype(list(zip(fieldnames, typenames)))
     return dtype
 
 
@@ -277,7 +283,7 @@ def point_cloud_from_fileobj(f):
     """
     header = []
     while True:
-        ln = f.readline().strip()
+        ln = f.readline().strip().decode()
         header.append(ln)
         if ln.startswith('DATA'):
             metadata = parse_header(header)
@@ -321,7 +327,7 @@ def point_cloud_to_fileobj(pc, fileobj, data_compression=None):
         metadata['data'] = data_compression
 
     header = write_header(metadata)
-    fileobj.write(header)
+    fileobj.write(header.encode())
     if metadata['data'].lower() == 'ascii':
         fmtstr = build_ascii_fmtstr(pc)
         np.savetxt(fileobj, pc.pc_data, fmt=fmtstr)
@@ -682,7 +688,7 @@ class PointCloud(object):
         assert(_metadata_is_consistent(md))
         assert(len(self.pc_data) == self.points)
         assert(self.width*self.height == self.points)
-        assert(len(self.fields) == len(self.count))
+        assert(len(self.fields) == len(list(self.count)))
         assert(len(self.fields) == len(self.type))
 
     def save(self, fname):
@@ -693,7 +699,7 @@ class PointCloud(object):
             warnings.warn('data_compression keyword is deprecated for'
                           ' compression')
             compression = kwargs['data_compression']
-        with open(fname, 'w') as f:
+        with open(fname, 'wb') as f:
             point_cloud_to_fileobj(self, f, compression)
 
     def save_pcd_to_fileobj(self, fileobj, compression=None, **kwargs):

@@ -11,3 +11,8 @@ History
 ------------------
 
 * Second release on PyPI.
+
+0.1.2 (2023-08-07)
+------------------
+
+* add support for python3
